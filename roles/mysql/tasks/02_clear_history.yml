@@ -1,0 +1,72 @@
+---
+
+- name: "清理 StatefulSet"
+  kubernetes.core.k8s:
+    kind: StatefulSet
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+
+- name: "清理 Pod"
+  kubernetes.core.k8s:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+
+
+- name: "清理 Service"
+  kubernetes.core.k8s:
+    kind: Service
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+
+
+- name: "清理 ConfigMap"
+  kubernetes.core.k8s:
+    kind: ConfigMap
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+
+- name: "清理 Secret"
+  kubernetes.core.k8s:
+    kind: Secret
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+
+
+- name: "清理命名空间: {{ namespace }})"
+  kubernetes.core.k8s:
+    kind: Deployment
+    name: "{{ namespace }}"
+    namespace: "{{ namespace }}"
+    state: absent
+    all: true
+    wait: yes
+    wait_timeout: 30
+  ignore_errors: true
+  run_once: true
+

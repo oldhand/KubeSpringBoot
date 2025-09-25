@@ -1,0 +1,359 @@
+---
+- name: "确保 MySQL 主机目录存在并设置正确权限"
+  ansible.builtin.file:
+    path: "{{ mysql_host_path }}"
+    state: directory
+    mode: '0777'  # 给予读写执行权限，适合 MySQL 数据目录
+    owner: '999'    # MySQL 容器内默认用户 ID 是 999
+    group: '999'    # MySQL 容器内默认用户组 ID 是 999
+    recurse: true
+
+- name: "创建命名空间"
+  kubernetes.core.k8s:
+    name: "{{ namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+  run_once: true
+
+- name: "创建 MySQL Secret"
+  kubernetes.core.k8s:
+    state: present
+    resource_definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ mysql_name }}-secret"
+        namespace: "{{ namespace }}"
+      type: Opaque
+      data:
+        mysql-root-password: "{{ mysql_root_password | b64encode }}"
+        mysql-repl-password: "{{ mysql_repl_password | b64encode }}"
+  run_once: true
+
+- name: "创建MySQL ConfigMap"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ mysql_name }}-config"
+        namespace: "{{ namespace }}"
+      data:
+        my.cnf: |
+          [mysqld]
+          user=mysql
+          default-storage-engine=InnoDB
+          character-set-server=utf8mb4
+          collation-server=utf8mb4_unicode_ci
+          port={{ mysql_port }}
+          bind-address=0.0.0.0
+          
+          # 主从复制配置 - 使用环境变量注入的序号作为server-id
+          log-bin=mysql-bin
+          binlog-format=ROW
+          expire_logs_days=7
+          relay-log=mysql-relay-bin
+          log-slave-updates=1
+          skip-slave-start=1
+  run_once: true
+
+
+- name: "确保 mysql_replicas 是整数"
+  set_fact:
+    mysql_replicas_int: "{{ mysql_replicas | int }}"
+
+###########################################################################
+# 4. 创建StatefulSet（带反亲和性，自动适配实例数）
+#      affinity:
+#        # 节点亲和性：仅调度到有存储标签的节点
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#              - matchExpressions:
+#                  - key: mysql-storage
+#                    operator: In
+#                    values:
+#                      - "true"
+#        # Pod反亲和性：跨节点部署
+#        podAntiAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            - labelSelector:
+#                matchExpressions:
+#                  - key: statefulset
+#                    operator: In
+#                    values:
+#                      - mysql
+#              topologyKey: "kubernetes.io/hostname"
+###########################################################################
+- name: "创建MySQL StatefulSet"
+  kubernetes.core.k8s:
+    state: present
+    resource_definition: |
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: "{{ mysql_name }}"
+        namespace: "{{ namespace }}"
+        labels:
+          app: mysql
+      spec:
+        serviceName: "{{ mysql_name }}-headless"
+        replicas: {{ mysql_replicas | int }}
+        selector:
+          matchLabels:
+            app: "{{ mysql_name }}"
+        template:
+          metadata:
+            labels:
+              app: "{{ mysql_name }}"
+              statefulset: mysql
+          spec:
+            tolerations:
+              - key: "node-role.kubernetes.io/control-plane"
+                operator: "Exists"  # 存在该污点即容忍
+                effect: "NoSchedule"  # 容忍的污点效果（Master 污点默认是 NoSchedule）
+            containers:
+              - name: "{{ mysql_name }}"
+                image: "{{ mysql_image }}"
+                ports:
+                  - containerPort: {{ mysql_port }}
+                    name: "{{ mysql_name }}"
+                env:
+                  - name: MYSQL_ROOT_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: "{{ mysql_name }}-secret"
+                        key: mysql-root-password
+                  - name: MYSQL_REPLICATION_USER
+                    value: "{{ mysql_repl_user }}"
+                  - name: MYSQL_REPLICATION_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: "{{ mysql_name }}-secret"
+                        key: mysql-repl-password
+                  - name: TZ
+                    value: "Asia/Shanghai"
+                command:
+                  - sh
+                  - -c
+                  - |
+                    # 1. 打印 Pod 名称（调试用，确认格式）
+                    POD_NAME=$(cat /etc/podinfo/name)
+                    echo "Current Pod Name: $POD_NAME"
+                    # 2. 提取 Pod 序号（处理多 '-' 场景，取最后一段）
+                    ORDINAL=$(echo "$POD_NAME" | awk -F'-' '{print $NF}')
+                    # 3. 空值判断（避免语法错误）
+                    if [ -z "$ORDINAL" ]; then
+                    echo "Error: Failed to get ORDINAL from Pod Name"
+                    exit 1
+                    fi
+                    # 4. 计算 server-id（确保为整数）
+                    SERVER_ID=$((100 + ORDINAL))
+                    # 5. 设置 read-only（主库 ORDINAL=0 为可写，其他为只读）
+                    READ_ONLY=1
+                    if [ "$ORDINAL" -eq 0 ]; then
+                    READ_ONLY=0
+                    echo "This is Master (ORDINAL=$ORDINAL), set read-only=0"
+                    else
+                    echo "This is Slave (ORDINAL=$ORDINAL), set read-only=1"
+                    fi
+                    # 6. 动态生成配置（覆盖原配置，确保生效）
+                    echo "[mysqld]" > /etc/mysql/conf.d/dynamic.cnf
+                    echo "server-id=$SERVER_ID" >> /etc/mysql/conf.d/dynamic.cnf
+                    echo "read-only=$READ_ONLY" >> /etc/mysql/conf.d/dynamic.cnf
+                    # 7. 启动 MySQL（执行官方入口脚本）
+                    exec docker-entrypoint.sh mysqld
+                livenessProbe:
+                  exec:
+                    command:
+                      - sh
+                      - -c
+                      - 'mysqladmin ping -uroot -p"${MYSQL_ROOT_PASSWORD}"'
+                  initialDelaySeconds: 60
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                readinessProbe:
+                  exec:
+                    command:
+                      - sh
+                      - -c
+                      - 'mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1"'
+                  initialDelaySeconds: 10
+                  periodSeconds: 5
+                  timeoutSeconds: 5
+                volumeMounts:
+                  - name: "{{ mysql_name }}-config"
+                    mountPath: /etc/mysql/conf.d/my.cnf
+                    subPath: my.cnf
+                  - name: mysql-data
+                    mountPath: /var/lib/mysql
+                  - name: podinfo
+                    mountPath: /etc/podinfo
+                    readOnly: false
+            volumes:
+              - name: init-sql-local
+                hostPath:
+                  path: "{{ mysql_init_sql_local_path }}"
+                  type: File
+              - name: "{{ mysql_name }}-config"
+                configMap:
+                  name: "{{ mysql_name }}-config"
+              - name: podinfo
+                downwardAPI:
+                  items:
+                    - path: "name"
+                      fieldRef:
+                        fieldPath: metadata.name
+              - name: mysql-data
+                hostPath:
+                  path: "{{ mysql_host_path }}/mysql-data"
+                  type: DirectoryOrCreate
+        volumeClaimTemplates: []
+  run_once: true
+
+###########################################################################
+# 5. 创建Service
+###########################################################################
+- name: "创建Headless Service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      metadata:
+        name: "{{ mysql_name }}-headless"
+        namespace: "{{ namespace }}"
+      spec:
+        clusterIP: None
+        selector:
+          app: "{{ mysql_name }}"
+        ports:
+          - port: "{{ mysql_port }}"
+            name: mysql
+  run_once: true
+
+- name: "创建NodePort Service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      metadata:
+        name: "{{ mysql_name }}-nodeport"
+        namespace: "{{ namespace }}"
+      spec:
+        type: NodePort
+        selector:
+          app: "{{ mysql_name }}"
+        ports:
+          - port: "{{ mysql_port }}"
+            targetPort: "{{ mysql_port }}"
+            nodePort: "{{ mysql_nodeport }}"
+  run_once: true
+
+###########################################################################
+# 6. 初始化主从复制（仅当存在从库时执行）
+###########################################################################
+- name: "等待主实例就绪"
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app={{ mysql_name }}"
+      - "statefulset.kubernetes.io/pod-name={{ mysql_name }}-0"
+  register: mysql_main_pod
+  until:
+    - mysql_main_pod.resources is defined
+    - mysql_main_pod.resources | length > 0
+    - mysql_main_pod.resources[0].status.phase == "Running"
+    - mysql_main_pod.resources[0].status.containerStatuses[0].ready == true
+  retries: 30
+  delay: 10
+
+
+- name: "创建复制用户"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ mysql_name }}-0"
+    command: |
+      bash -c '
+        # 使用变量存储密码，避免特殊字符问题
+        ROOT_PWD="{{ mysql_root_password }}"
+        REPL_USER="{{ mysql_repl_user }}"
+        REPL_PWD="{{ mysql_repl_password }}"
+      
+        # 重试机制，处理可能的暂时性问题
+        for i in {1..10}; do
+          # 使用here-document方式传递SQL，避免引号问题
+          mysql -u root -p"$ROOT_PWD" <<EOF
+          CREATE USER IF NOT EXISTS '$REPL_USER'@'%' IDENTIFIED BY '$REPL_PWD';
+          GRANT REPLICATION SLAVE ON *.* TO '$REPL_USER'@'%';
+          FLUSH PRIVILEGES;
+      EOF
+      
+          # 检查命令执行结果
+          if [ $? -eq 0 ]; then
+            echo "Successfully created replication user"
+            exit 0
+          fi
+      
+          echo "Failed to create replication user, retrying in 10 seconds... (attempt $i/10)"
+          sleep 10
+        done
+      
+        echo "Failed to create replication user after 10 attempts"
+        exit 1
+      '
+  run_once: true
+  register: create_repl_user_result
+  failed_when: >
+    (create_repl_user_result is defined and 
+     'ERROR 1045' not in create_repl_user_result.stderr and 
+     create_repl_user_result.rc != 0) or
+    create_repl_user_result is undefined
+
+
+- name: "生成从库列表（mysql-1, mysql-2...）"
+  set_fact:
+    slave_pods: "{{ range(1, mysql_replicas|int) | map('regex_replace', '^', mysql_name + '-') | list }}"
+  when: mysql_replicas|int > 1
+
+- name: "等待从库实例就绪"
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app={{ mysql_name }}"
+      - "statefulset.kubernetes.io/pod-name={{ item }}"
+  register: mysql_slave_pod
+  until:
+    - mysql_slave_pod.resources is defined
+    - mysql_slave_pod.resources | length > 0
+    - mysql_slave_pod.resources[0].status.phase == "Running"
+    - mysql_slave_pod.resources[0].status.containerStatuses[0].ready == true
+  retries: 30
+  delay: 10
+  loop: "{{ slave_pods }}"
+  when: mysql_replicas|int > 1
+
+- name: "配置从库复制"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ item }}"
+    command: >
+      mysql -u root -p$(echo {{ mysql_root_password }}) -e "
+      STOP SLAVE;
+      CHANGE MASTER TO
+        MASTER_HOST='{{ mysql_name }}-0.{{ mysql_name }}-headless.{{ namespace }}.svc.cluster.local',
+        MASTER_USER='{{ mysql_repl_user }}',
+        MASTER_PASSWORD='{{ mysql_repl_password }}',
+        MASTER_PORT={{ mysql_port }},
+        MASTER_AUTO_POSITION=1;
+      START SLAVE;
+      SHOW SLAVE STATUS\G"
+  loop: "{{ slave_pods }}"
+  when: mysql_replicas|int > 1
+  register: slave_config_result
+  until: slave_config_result.rc == 0
+  retries: 10
+  delay: 10

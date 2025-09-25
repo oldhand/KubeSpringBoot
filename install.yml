@@ -1,0 +1,10 @@
+---
+- hosts: k8s
+  gather_facts: yes
+  roles:
+#     Install mysql for k8s
+    - mysql
+#     Install ceph for k8s
+#    - ceph
+
+
