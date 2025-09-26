@@ -1,0 +1,138 @@
+---
+- name: "确保 Redis 主机目录存在并设置正确权限"
+  ansible.builtin.file:
+    path: "{{ redis_host_path }}"
+    state: directory
+    mode: '0777'  # 给予读写执行权限，适合 MySQL 数据目录
+    recurse: true
+
+- name: "创建命名空间"
+  kubernetes.core.k8s:
+    name: "{{ namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+  run_once: true
+
+- name: "创建 Redis ConfigMap"
+  kubernetes.core.k8s:
+    state: present
+    resource_definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ redis_name }}-config"
+        namespace: "{{ namespace }}"
+      data:
+        redis.conf: |
+          cluster-enabled yes
+          cluster-config-file nodes.conf
+          cluster-node-timeout 5000
+          appendonly yes
+          protected-mode no
+          port {{ redis_port }}
+          requirepass {{ redis_password }}
+          masterauth {{ redis_password }}
+  run_once: true
+
+- name: "创建 Redis StatefulSet"
+  kubernetes.core.k8s:
+    state: present
+    resource_definition: |
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: "{{ redis_name }}"
+        namespace: "{{ namespace }}"
+        labels:
+          app: mysql
+      spec:
+        serviceName: "{{ redis_name }}-headless"
+        replicas: {{ redis_size | int * (redis_replicas | int + 1) }}
+        selector:
+          matchLabels:
+            app: "{{ redis_name }}"
+        template:
+          metadata:
+            labels:
+              app: "{{ redis_name }}"
+              statefulset: mysql
+          spec:
+            tolerations:
+              - key: "node-role.kubernetes.io/control-plane"
+                operator: "Exists"  # 存在该污点即容忍
+                effect: "NoSchedule"  # 容忍的污点效果（Master 污点默认是 NoSchedule）
+            containers:
+              - name: "{{ redis_name }}"
+                image: "{{ redis_image }}"
+                ports:
+                  - containerPort: {{ redis_port }}
+                    name: "{{ redis_name }}"
+                  - containerPort: 16379
+                    name: cluster
+               
+                command:
+                  - sh
+                  - -c
+                  - |
+                    redis-server /etc/redis/redis.conf
+               
+                volumeMounts:
+                  - name: redis-config
+                    mountPath: /etc/redis
+                  - name: redis-data
+                    mountPath: /data
+            volumes:
+              - name: redis-config
+                configMap:
+                  name: "{{ redis_name }}-config"
+        volumeClaimTemplates:
+          - metadata:
+              name: redis-data
+            spec:
+              accessModes: [ "ReadWriteOnce" ]
+              resources:
+                requests:
+                  storage: "{{ redis_storage_size }}"
+              storageClassName: "{{ redis_storage_class }}"
+  run_once: true
+
+###########################################################################
+# 5. 创建Service
+###########################################################################
+- name: "创建 Reids Headless Service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      metadata:
+        name: "{{ redis_name }}-headless"
+        namespace: "{{ namespace }}"
+      spec:
+        clusterIP: None
+        selector:
+          app: "{{ redis_name }}"
+        ports:
+          - port: "{{ redis_port }}"
+            name: redis
+          - port: 16379
+            name: cluster
+  run_once: true
+
+- name: "创建 Redis NodePort Service"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      metadata:
+        name: "{{ redis_name }}-nodeport"
+        namespace: "{{ namespace }}"
+      spec:
+        type: NodePort
+        selector:
+          app: "{{ redis_name }}"
+        ports:
+          - port: "{{ redis_port }}"
+            targetPort: "{{ redis_port }}"
+            nodePort: "{{ redis_nodeport }}"
+  run_once: true

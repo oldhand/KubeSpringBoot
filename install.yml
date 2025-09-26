@@ -3,8 +3,8 @@
   gather_facts: yes
   roles:
 #     Install mysql for k8s
-    - mysql
-#     Install ceph for k8s
-#    - ceph
+#    - mysql
+#     Install redis for k8s
+    - redis
 
 

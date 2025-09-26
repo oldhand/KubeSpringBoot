@@ -4,7 +4,7 @@
   kubernetes.core.k8s:
     kind: StatefulSet
     namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}"
+    name: "{{ redis_name }}"
     state: absent
     all: true
     wait: yes
@@ -16,7 +16,7 @@
   kubernetes.core.k8s:
     kind: Pod
     namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
+    name: "{{ redis_name }}-*"
     state: absent
     all: true
     wait: yes
@@ -29,7 +29,7 @@
   kubernetes.core.k8s:
     kind: Service
     namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
+    name: "{{ redis_name }}-*"
     state: absent
     all: true
     wait: yes
@@ -42,7 +42,7 @@
   kubernetes.core.k8s:
     kind: ConfigMap
     namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
+    name: "{{ redis_name }}-*"
     state: absent
     all: true
     wait: yes
@@ -54,7 +54,7 @@
   kubernetes.core.k8s:
     kind: Secret
     namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
+    name: "{{ redis_name }}-*"
     state: absent
     all: true
     wait: yes
