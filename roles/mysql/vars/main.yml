@@ -6,13 +6,12 @@ max_replicas: 3                          # 最大实例数（1主N从，建议�
 min_replicas: 1                          # 最小实例数（至少1个主库）
 mysql_name: "mysql-5-7-44"               # MySQL容器名称
 mysql_root_user: "root"
-mysql_root_password: "Root@!qaz2wsx"
-mysql_repl_user: "root"
-mysql_repl_password: "Root@!qaz2wsx"
+mysql_root_password: "Root@123qwe"
+mysql_repl_user: "repl"
+mysql_repl_password: "Root@123qwe"
 mysql_port: 3306
 mysql_nodeport: 30306
 mysql_host_path: "/data/mysql"            # 所有节点需提前创建此目录
-mysql_init_sql_local_path: "init.sql"
 mysql_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:5.7.44"
 
 # Redis配置

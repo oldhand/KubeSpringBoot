@@ -1,0 +1,120 @@
+---
+
+
+###########################################################################
+# 6. 初始化主从复制（仅当存在从库时执行）
+###########################################################################
+- name: "等待主实例就绪"
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app={{ mysql_name }}"
+      - "statefulset.kubernetes.io/pod-name={{ mysql_name }}-0"
+  register: mysql_main_pod
+  until:
+    - mysql_main_pod.resources is defined
+    - mysql_main_pod.resources | length > 0
+    - mysql_main_pod.resources[0].status.phase == "Running"
+    - mysql_main_pod.resources[0].status.containerStatuses[0].ready == true
+  retries: 30
+  delay: 10
+
+- name: "创建复制用户"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ mysql_name }}-0"
+    command: |
+      bash -c '
+        ROOT_PWD="{{ mysql_root_password }}"
+        REPL_USER="{{ mysql_repl_user }}"
+        REPL_PWD="{{ mysql_repl_password }}"
+      
+        # 增加连接超时参数（5秒连接超时）
+        MYSQL_CMD="mysql -u root -p\"$ROOT_PWD\" --connect-timeout=5"
+      
+        # 重试次数改为3次
+        for i in {1..3}; do
+          # 先检查用户是否已存在
+          if $MYSQL_CMD -e "SELECT 1 FROM mysql.user WHERE user='$REPL_USER' AND host='%'" >/dev/null 2>&1; then
+            echo "Replication user already exists"
+            exit 0
+          fi
+      
+          # 执行创建用户命令
+          $MYSQL_CMD <<EOF
+          CREATE USER IF NOT EXISTS '$REPL_USER'@'%' IDENTIFIED BY "$REPL_PWD";
+          GRANT REPLICATION SLAVE ON *.* TO '$REPL_USER'@'%';
+          FLUSH PRIVILEGES;
+      EOF
+      
+          if [ $? -eq 0 ]; then
+            echo "Successfully created replication user"
+            exit 0
+          fi
+      
+          echo "Failed to create replication user, retrying in 10 seconds... (attempt $i/3)"
+          sleep 10
+        done
+      
+        echo "Failed to create replication user after 3 attempts"
+        exit 1
+      '
+  run_once: true
+  register: create_repl_user_result
+  failed_when: >
+    (create_repl_user_result is defined and 
+     'ERROR 1045' not in create_repl_user_result.stderr and 
+     create_repl_user_result.rc != 0) or
+    create_repl_user_result is undefined
+
+- name: "创建复制用户结果"
+  debug:
+    var: create_repl_user_result.stdout
+
+
+
+- name: "生成从库列表（mysql-1, mysql-2...）"
+  set_fact:
+    slave_pods: "{{ range(1, mysql_replicas|int) | map('regex_replace', '^', mysql_name + '-') | list }}"
+  when: mysql_replicas|int > 1
+
+- name: "等待从库实例就绪"
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - "app={{ mysql_name }}"
+      - "statefulset.kubernetes.io/pod-name={{ item }}"
+  register: mysql_slave_pod
+  until:
+    - mysql_slave_pod.resources is defined
+    - mysql_slave_pod.resources | length > 0
+    - mysql_slave_pod.resources[0].status.phase == "Running"
+    - mysql_slave_pod.resources[0].status.containerStatuses[0].ready == true
+  retries: 30
+  delay: 10
+  loop: "{{ slave_pods }}"
+  when: mysql_replicas|int > 1
+
+- name: "配置从库复制"
+  kubernetes.core.k8s_exec:
+    namespace: "{{ namespace }}"
+    pod: "{{ item }}"
+    command: >
+      mysql -u root -p$(echo {{ mysql_root_password }}) -e "
+      STOP SLAVE;
+      CHANGE MASTER TO
+        MASTER_HOST='{{ mysql_name }}-0.{{ mysql_name }}-headless.{{ namespace }}.svc.cluster.local',
+        MASTER_USER='{{ mysql_repl_user }}',
+        MASTER_PASSWORD='{{ mysql_repl_password }}',
+        MASTER_PORT={{ mysql_port }},
+        MASTER_AUTO_POSITION=1;
+      START SLAVE;
+      SHOW SLAVE STATUS\G"
+  loop: "{{ slave_pods }}"
+  when: mysql_replicas|int > 1
+  register: slave_config_result
+  until: slave_config_result.rc == 0
+  retries: 10
+  delay: 10
