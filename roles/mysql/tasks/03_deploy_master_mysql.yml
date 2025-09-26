@@ -59,6 +59,21 @@
           skip-slave-start=1
   run_once: true
 
+- name: "创建用户 ConfigMap"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: mysql-init-scripts
+        namespace: "{{ namespace }}"
+      data:
+        create_repl_user.sql: |
+          CREATE USER IF NOT EXISTS '{{ mysql_repl_user }}'@'%' IDENTIFIED BY '{{ mysql_repl_password }}';
+          GRANT REPLICATION SLAVE ON *.* TO '{{ mysql_repl_user }}'@'%';
+          FLUSH PRIVILEGES;
+  run_once: true
 
 - name: "确保 mysql_replicas 是整数"
   set_fact:
@@ -192,6 +207,12 @@
                   - name: podinfo
                     mountPath: /etc/podinfo
                     readOnly: false
+                  - name: zoneinfo
+                    mountPath: /usr/share/zoneinfo
+                    readOnly: true
+                  - name: init-scripts
+                    mountPath: /docker-entrypoint-initdb.d/create_repl_user.sql
+                    subPath: create_repl_user.sql
             volumes:
               - name: "{{ mysql_name }}-config"
                 configMap:
@@ -206,6 +227,13 @@
                 hostPath:
                   path: "{{ mysql_host_path }}/mysql-data"
                   type: DirectoryOrCreate
+              - name: zoneinfo
+                hostPath:
+                  path: /usr/share/zoneinfo  # 宿主机时区数据目录
+                  type: Directory
+              - name: init-scripts
+                configMap:
+                  name: mysql-init-scripts
         volumeClaimTemplates: []
   run_once: true
 

@@ -19,58 +19,84 @@
     - mysql_main_pod.resources[0].status.containerStatuses[0].ready == true
   retries: 30
   delay: 10
-
-- name: "创建复制用户"
-  kubernetes.core.k8s_exec:
-    namespace: "{{ namespace }}"
-    pod: "{{ mysql_name }}-0"
-    command: |
-      bash -c '
-        ROOT_PWD="{{ mysql_root_password }}"
-        REPL_USER="{{ mysql_repl_user }}"
-        REPL_PWD="{{ mysql_repl_password }}"
-      
-        # 增加连接超时参数（5秒连接超时）
-        MYSQL_CMD="mysql -u root -p\"$ROOT_PWD\" --connect-timeout=5"
-      
-        # 重试次数改为3次
-        for i in {1..3}; do
-          # 先检查用户是否已存在
-          if $MYSQL_CMD -e "SELECT 1 FROM mysql.user WHERE user='$REPL_USER' AND host='%'" >/dev/null 2>&1; then
-            echo "Replication user already exists"
-            exit 0
-          fi
-      
-          # 执行创建用户命令
-          $MYSQL_CMD <<EOF
-          CREATE USER IF NOT EXISTS '$REPL_USER'@'%' IDENTIFIED BY "$REPL_PWD";
-          GRANT REPLICATION SLAVE ON *.* TO '$REPL_USER'@'%';
-          FLUSH PRIVILEGES;
-      EOF
-      
-          if [ $? -eq 0 ]; then
-            echo "Successfully created replication user"
-            exit 0
-          fi
-      
-          echo "Failed to create replication user, retrying in 10 seconds... (attempt $i/3)"
-          sleep 10
-        done
-      
-        echo "Failed to create replication user after 3 attempts"
-        exit 1
-      '
-  run_once: true
-  register: create_repl_user_result
-  failed_when: >
-    (create_repl_user_result is defined and 
-     'ERROR 1045' not in create_repl_user_result.stderr and 
-     create_repl_user_result.rc != 0) or
-    create_repl_user_result is undefined
-
-- name: "创建复制用户结果"
-  debug:
-    var: create_repl_user_result.stdout
+#
+#- name: "创建复制用户"
+#  kubernetes.core.k8s_exec:
+#    namespace: "{{ namespace }}"
+#    pod: "{{ mysql_name }}-0"
+#    command: |
+#      bash -c '
+#        ROOT_PWD="{{ mysql_root_password }}"
+#        REPL_USER="{{ mysql_repl_user }}"
+#        REPL_PWD="{{ mysql_repl_password }}"
+#
+#        # 增加连接超时参数（5秒连接超时）
+#        MYSQL_CMD="mysql -u root -p\"$ROOT_PWD\" --connect-timeout=5"
+#        echo "MySQL连接命令: $MYSQL_CMD (密码已脱敏)"
+#
+#        # 重试次数改为3次
+#        for i in {1..3}; do
+#          echo "第 $i 次尝试连接MySQL主库..."
+#          # 测试连接是否正常
+#          if ! $MYSQL_CMD -e "SELECT 1" >/dev/null 2>&1; then
+#            echo "MySQL连接失败，错误信息: $($MYSQL_CMD -e "SELECT 1" 2>&1)"
+#            echo "重试间隔10秒..."
+#            sleep 10
+#            continue
+#          fi
+#          echo "MySQL连接成功"
+#
+#          # 先检查用户是否已存在
+#          echo "检查复制用户 $REPL_USER@% 是否存在..."
+#          if $MYSQL_CMD -e "SELECT 1 FROM mysql.user WHERE user='$REPL_USER' AND host='%'" >/dev/null 2>&1; then
+#            echo "Replication user $REPL_USER already exists"
+#            exit 0
+#          fi
+#          echo "复制用户不存在，开始创建..."
+#
+#          # 执行创建用户命令
+#          echo "执行创建用户SQL..."
+#          CREATE_OUTPUT=$($MYSQL_CMD <<EOF
+#          CREATE USER IF NOT EXISTS '$REPL_USER'@'%' IDENTIFIED BY "$REPL_PWD";
+#          GRANT REPLICATION SLAVE ON *.* TO '$REPL_USER'@'%';
+#          FLUSH PRIVILEGES;
+#      EOF
+#          2>&1)
+#          CREATE_EXIT_CODE=$?
+#
+#          echo "SQL执行结果: $CREATE_OUTPUT"
+#          if [ $CREATE_EXIT_CODE -eq 0 ]; then
+#            echo "Successfully created replication user $REPL_USER"
+#            # 验证用户是否创建成功
+#            if $MYSQL_CMD -e "SELECT 1 FROM mysql.user WHERE user='$REPL_USER' AND host='%'" >/dev/null 2>&1; then
+#              echo "用户创建验证成功"
+#              exit 0
+#            else
+#              echo "用户创建后验证失败"
+#              CREATE_EXIT_CODE=1
+#            fi
+#          fi
+#
+#          echo "Failed to create replication user (exit code: $CREATE_EXIT_CODE), 错误信息: $CREATE_OUTPUT"
+#          echo "重试间隔10秒... (attempt $i/3)"
+#          sleep 10
+#        done
+#
+#        echo "Failed to create replication user after 3 attempts"
+#        exit 1
+#      '
+#  run_once: true
+#  register: create_repl_user_result
+#  failed_when: >
+#    (create_repl_user_result is defined and
+#     'ERROR 1045' not in create_repl_user_result.stderr and
+#     create_repl_user_result.rc != 0) or
+#    create_repl_user_result is undefined
+#
+#
+#- name: "创建复制用户结果"
+#  debug:
+#    var: create_repl_user_result.stdout
 
 
 
