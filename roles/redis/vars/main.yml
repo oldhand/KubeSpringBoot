@@ -3,12 +3,10 @@ namespace: spring-boot
 
 # Redis集群配置
 redis_name: "redis-cluster"
-redis_size: 3  # 集群节点数(3主3从建议)
-redis_replicas: 1  # 每个主节点的从节点数
 redis_port: 6379
 redis_nodeport: 30379
+redis_cluster_enabled: ""
 redis_host_path: "/data/redis"  # 所有节点需提前创建此目录
 redis_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:8.2.1"
 redis_password: "Redis@123qwe"  # 集群密码
 redis_storage_size: "10Gi"  # Redis存储大小
-redis_storage_class: "standard"  # 存储类名称，根据你的K8s集群实际存储类修改
