@@ -98,7 +98,7 @@
 
 - name: 渲染Deployment/StatefulSet模板
   ansible.builtin.template:
-    src: ./templates/redis-deploy-sts.yaml.j2
+    src: redis-deploy-sts.yaml.j2
     dest: /tmp/redis-deploy-sts.yaml
     mode: '0644'
   run_once: true

@@ -1,66 +1,27 @@
 ---
-
-- name: "清理 StatefulSet"
-  kubernetes.core.k8s:
-    kind: StatefulSet
-    namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}"
-    state: absent
-    all: true
-    wait: yes
-    wait_timeout: 30
-  ignore_errors: true
+- name: 清理 Redis 资源
+  ansible.builtin.command: >
+    kubectl delete {{ item.kind }} {{ item.name }} -n {{ namespace }} --ignore-not-found=true
+  loop:
+    - kind: Deployment
+      name: "{{ mysql_name }}"
+    - kind: StatefulSet
+      name: "{{ mysql_name }}"
+    - kind: ReplicaSet
+      name: "{{ mysql_name }}-.*"
+    - kind: Service
+      name: "{{ mysql_name }}-.*"
+    - kind: ConfigMap
+      name: "{{ mysql_name }}-.*"
+    - kind: Secret
+      name: "{{ mysql_name }}-.*"
+    - kind: PersistentVolumeClaim
+      name: "{{ mysql_name }}-.*"
+    - kind: Job
+      name: "{{ mysql_name }}-.*"
+    - kind: PersistentVolumeClaim
+      name: "{{ mysql_name }}-.*"
+    - kind: PersistentVolume
+      name: "{{ mysql_name }}-.*"
+  failed_when: false
   run_once: true
-
-- name: "清理 Pod"
-  kubernetes.core.k8s:
-    kind: Pod
-    namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
-    state: absent
-    all: true
-    wait: yes
-    wait_timeout: 30
-  ignore_errors: true
-  run_once: true
-
-
-- name: "清理 Service"
-  kubernetes.core.k8s:
-    kind: Service
-    namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
-    state: absent
-    all: true
-    wait: yes
-    wait_timeout: 30
-  ignore_errors: true
-  run_once: true
-
-
-- name: "清理 ConfigMap"
-  kubernetes.core.k8s:
-    kind: ConfigMap
-    namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
-    state: absent
-    all: true
-    wait: yes
-    wait_timeout: 30
-  ignore_errors: true
-  run_once: true
-
-- name: "清理 Secret"
-  kubernetes.core.k8s:
-    kind: Secret
-    namespace: "{{ namespace }}"
-    name: "{{ mysql_name }}-*"
-    state: absent
-    all: true
-    wait: yes
-    wait_timeout: 30
-  ignore_errors: true
-  run_once: true
-
-
-

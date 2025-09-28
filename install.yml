@@ -3,7 +3,7 @@
   gather_facts: yes
   roles:
 #     Install mysql for k8s
-#    - mysql
+    - mysql
 #     Install redis for k8s
     - redis
 

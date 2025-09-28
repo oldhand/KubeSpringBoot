@@ -1,10 +1,10 @@
 ---
 - name: 显示当前主机的系统信息
   ansible.builtin.debug:
-    msg: |
-      操作系统: {{ ansible_distribution }}
-      版本: {{ ansible_distribution_version }}
-      CPU架构: {{ ansible_architecture }}
+    msg:
+      - "操作系统: {{ ansible_distribution }}"
+      - "版本: {{ ansible_distribution_version }}"
+      - "CPU架构: {{ ansible_architecture }}"
 
 - name: 检查Kubernetes集群
   kubernetes.core.k8s_info:
@@ -36,7 +36,7 @@
 
 
 - name: "显示最终配置"
-  debug:
+  ansible.builtin.debug:
     msg:
       - "集群总节点数: {{ k8s_nodes.resources | length }}"
       - "可用节点数（排除封锁节点）: {{ redis_total_nodes }}"

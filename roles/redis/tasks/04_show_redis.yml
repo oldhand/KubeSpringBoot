@@ -2,6 +2,7 @@
 - name: 输出部署结果摘要
   ansible.builtin.debug:
     msg:
+      - "=================================================="
       - "部署模式：{{ redis_mode }}（{{ redis_total_nodes }}节点）"
       - "命名空间：{{ namespace }}"
       - "访问地址："

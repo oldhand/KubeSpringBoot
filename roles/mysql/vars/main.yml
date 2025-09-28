@@ -13,16 +13,3 @@ mysql_port: 3306
 mysql_nodeport: 30306
 mysql_host_path: "/data/mysql"            # 所有节点需提前创建此目录
 mysql_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:5.7.44"
-
-# Redis配置
-redis_replicas: 1
-redis_image: redis:6.2-alpine
-redis_password: ""
-redis_storage_size: "5Gi"
-redis_storage_class: "standard"
-
-# Spring Boot配置
-springboot_replicas: 2
-springboot_image: "your-springboot-image:latest"  # 包含Java 1.8的Spring Boot镜像
-springboot_port: 8080
-springboot_service_type: NodePort
