@@ -27,6 +27,8 @@ EXPOSE {{ app_port }}
 ENTRYPOINT ["sh", "-c", " \
 # 1. 确保/data下的子目录存在（挂载PVC后可能为空） 
 mkdir -p /data/logs /data/uploads; \
+mkdir -p /data/app;  \
+ln -s /data/app /app/logs;  \
 # 启动Java应用（保留原JVM参数）
 # 容器适配：感知容器资源限制（Java 8u191+/11+支持）
 java -XX:+UseContainerSupport \

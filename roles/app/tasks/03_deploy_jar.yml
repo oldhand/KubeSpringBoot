@@ -50,10 +50,15 @@
 - name: 删除已存在的旧镜像（若存在）
   shell: |
     docker rmi {{ app_jar_name }}:{{ app_version }}
-  ignore_errors: yes  # 忽略镜像不存在时的报错
+  ignore_errors: yes
   run_once: true
-  changed_when: false  # 避免无实际变更时标记为"changed"
 
+
+- name: 清理虚悬镜像
+  shell: |
+    docker image prune -f
+  ignore_errors: yes
+  run_once: true
 
 - name: 构建应用镜像
   shell: |
