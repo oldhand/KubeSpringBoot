@@ -1,0 +1,66 @@
+---
+- name: "确保 App 主机目录存在并设置正确权限"
+  ansible.builtin.file:
+    path: "{{ app_host_path }}"
+    state: directory
+    mode: '0755'  # 收紧权限，避免过度开放
+    owner: root
+    group: root
+    recurse: true
+
+- name: "创建命名空间"
+  kubernetes.core.k8s:
+    name: "{{ namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+  run_once: true
+
+- name: 渲染部署文件（Deployment）
+  ansible.builtin.template:
+    src: "app-deployment.yml.j2"
+    dest: /tmp/app-deployment.yaml
+    mode: '0644'
+  run_once: true
+
+
+
+- name: 应用部署文件（Deployment）
+  kubernetes.core.k8s:
+    src: /tmp/app-deployment.yaml
+    state: present
+
+
+- name: 创建 NodePort Console Service（外部/集群内访问App）
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      metadata:
+        name: "{{ app_name }}-nodeport"
+        namespace: "{{ namespace }}"
+      spec:
+        type: NodePort  # 暴露节点端口（外部可访问）
+        selector:
+          app: "{{ app_name }}"
+        ports:
+          - port: "{{ app_port }}"   # Service集群内端口
+            targetPort: "{{ app_port }}"  # 指向  Pod端口
+            nodePort: "{{ app_nodeport }}"# 节点暴露  端口（外部访问用）
+  run_once: true
+
+
+# 7. 等待部署就绪
+- name: 等待App Pod全部运行就绪
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app = {{ app_name }}  # 筛选App Pod
+  register: app_pod_status
+  until:
+    - app_pod_status.resources | map(attribute='status.phase') | unique == ['Running']
+  retries: 30  # 重试30次（总等待时间30*10=300秒=5分钟）
+  delay: 10    # 每10秒检查一次
+  run_once: true
+

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+spec:
+  replicas: {{ app_replicas }}
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+    spec:
+      # 容忍控制节点污点（允许部署在Master）
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: {{ app_name }}
+          image: {{ app_jar_name }}:{{ app_version }}
+          imagePullPolicy: Never
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          ports:
+            - containerPort: {{ app_port }}
+          env:
+            # 注入Spring环境变量
+            - name: SPRING_PROFILES_ACTIVE
+              value: "{{ app_env.SPRING_PROFILES_ACTIVE }}"  # 即"prod"
+            # 注入MySQL连接信息
+            - name: MYSQL_HOST
+              value: "{{ app_env.MYSQL_HOST }}"  # 展开为"xxx-headless.ns.svc.cluster.local"
+            - name: MYSQL_PORT
+              value: "{{ app_env.MYSQL_PORT }}"
+            # 补充MySQL敏感信息（从Secret注入）
+            - name: MYSQL_USERNAME
+              value: "root"
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_env.MYSQL_SECRET_NAME }}
+                  key: mysql-root-password
+
+            # 注入Redis连接信息
+            - name: REDIS_HOST
+              value: "{{ app_env.REDIS_HOST }}"
+            - name: REDIS_PORT
+              value: "{{ app_env.REDIS_PORT }}"
+            # 补充Redis密码（若有）
+            - name: REDIS_PASSWORD
+              value: "{{ app_env.REDIS_PASSWORD }}"

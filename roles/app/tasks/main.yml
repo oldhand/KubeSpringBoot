@@ -1,0 +1,7 @@
+---
+- include_tasks: 00_check_kubernetes.yml
+- include_tasks: 01_deploy_images.yml
+- include_tasks: 02_deploy_jar.yml
+- include_tasks: 03_clear_history.yml
+- include_tasks: 04_deploy_app.yml
+- include_tasks: 05_show_app.yml

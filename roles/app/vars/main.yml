@@ -1,0 +1,38 @@
+# 整个平台的命名空间
+namespace: spring-boot
+
+# 应用基础配置
+app_name: "kube-admin"               # 应用名称
+app_version: "1.0"            # 版本
+app_port: 8080                       # 应用内部端口
+app_nodeport: 30880                  # 外部访问节点端口
+app_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/openjdk:8-jdk-alpine"  # 镜像地址
+app_host_path: "/data/java"    # 持久化目录（日志/配置）
+app_storage_size: "5Gi"              # 存储大小
+
+# 资源限制（单点/集群模式自适应）
+app_resources:
+  standalone:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  cluster:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
+# 环境配置（通过ConfigMap挂载）
+app_env:
+  SPRING_PROFILES_ACTIVE: "prod"
+  MYSQL_HOST: "mysql-5-7-44-headless.{{ namespace }}.svc.cluster.local"  # 关联MySQL
+  MYSQL_PORT: "3306"
+  MYSQL_SECRET_NAME : "mysql-5-7-44-secret"
+  REDIS_HOST: "redis-cluster-headless.{{ namespace }}.svc.cluster.local"  # 关联Redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: "!qaz2Wsx"  # 集群密码

@@ -1,0 +1,67 @@
+---
+- name: 查找playbook目录下的Jar文件（仅根目录，不递归子目录）
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}"  # playbook根目录
+    patterns: "*.jar"
+    recurse: no  # 不搜索子目录
+    file_type: file
+  register: jar_files
+  run_once: true
+
+
+- name: 无Jar文件时报错
+  ansible.builtin.fail:
+    msg: "未在playbook目录（{{ playbook_dir }}）找到任何Jar文件，请放置一个Jar包后重试"
+  when: jar_files.matched == 0
+  run_once: true
+
+- name: Jar文件时提取信息
+  ansible.builtin.set_fact:
+    app_jar_name: "{{ jar_files.files[0].path | basename | regex_replace('\\.jar$', '') }}"
+  when: jar_files.matched > 0
+  run_once: true
+
+- name: 显示找到的Jar文件信息
+  ansible.builtin.debug:
+    msg: "已自动识别Jar包：{{ app_jar_name }}.jar）"
+  run_once: true
+
+- name: 创建临时构建目录
+  file:
+    path: "/tmp/app-build"
+    state: directory
+    mode: '0755'
+  run_once: true
+
+- name: 复制Jar包到构建目录
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/{{ app_jar_name }}.jar"
+    dest: "/tmp/app-build/{{ app_jar_name }}.jar"
+    mode: '0644'
+  run_once: true
+
+- name: 渲染 Dockerfile（基于openjdk:8-jdk-alpine）
+  ansible.builtin.template:
+    src: "Dockerfile.j2"
+    dest: /tmp/app-build/Dockerfile
+    mode: '0644'
+  run_once: true
+
+- name: 删除已存在的旧镜像（若存在）
+  shell: |
+    docker rmi {{ app_jar_name }}:{{ app_version }}
+  ignore_errors: yes  # 忽略镜像不存在时的报错
+  run_once: true
+  changed_when: false  # 避免无实际变更时标记为"changed"
+
+
+- name: 构建应用镜像
+  shell: |
+    cd /tmp/app-build
+    DOCKER_BUILDKIT=0 docker build -t {{ app_jar_name }}:{{ app_version }} .
+  run_once: true
+
+- name: 清理临时构建目录
+  file:
+    path: "/tmp/app-build"
+    state: absent
