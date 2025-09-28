@@ -45,6 +45,8 @@ spec:
                 secretKeyRef:
                   name: {{ minio_name }}-secret
                   key: root-password
+            - name: MINIO_CONSOLE_ADDRESS
+              value: ":9001"
           args:
             - server
             - /data  # 单节点存储路径

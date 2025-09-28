@@ -58,6 +58,8 @@ spec:
                 secretKeyRef:
                   name: {{ minio_name }}-secret
                   key: root-password
+            - name: MINIO_CONSOLE_ADDRESS
+              value: ":9001"
             - name: MINIO_DOMAIN
               value: {{ minio_domain }}
           args:

@@ -11,8 +11,8 @@ minio_host_path: "/data/minio"  # 所有节点需提前创建此目录
 minio_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
 
 # 认证信息
-minio_root_user: "minioadmin"
-minio_root_password: "Minio@123qwe"
+minio_root_user: "admin"
+minio_root_password: "!qaz2Wsx"
 
 # 存储配置
 minio_storage_size: "20Gi"

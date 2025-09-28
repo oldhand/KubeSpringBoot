@@ -151,7 +151,7 @@
         ports:
           - port: "{{ minio_console_port }}"        # Service集群内端口
             targetPort: "{{ minio_console_port }}"  # 指向 Console Pod端口
-            nodePort: "{{ minio_console_nodeport }}"# 节点暴露C onsole 端口（外部访问用）
+            nodePort: "{{ minio_console_nodeport }}"# 节点暴露 Console 端口（外部访问用）
   run_once: true
 
 
