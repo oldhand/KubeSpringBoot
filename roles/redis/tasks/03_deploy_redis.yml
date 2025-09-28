@@ -124,10 +124,8 @@
         ports:
           - port: "{{ redis_port }}"
             name: redis
-          - port: 16379
-            name: cluster
   run_once: true
-  when: redis_mode == "cluster"
+  when: redis_mode == "single"
 
 - name: 集群模式 - 创建Headless Service（用于集群节点通信）
   kubernetes.core.k8s:
@@ -146,7 +144,7 @@
             name: redis  # 服务端口（与Pod端口对应）
           - port: 16379
             name: cluster  # 集群总线端口（与Pod端口对应）
-  when: headless_needed | bool
+  when: redis_mode == "cluster"
   run_once: true
 
 - name: 创建NodePort Service（外部/集群内访问Redis）

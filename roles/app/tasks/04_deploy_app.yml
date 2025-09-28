@@ -8,6 +8,43 @@
     group: root
     recurse: true
 
+- name: 单节点模式 - 创建 App 数据 PV
+  kubernetes.core.k8s:
+    state: present
+    resource_definition:
+      apiVersion: v1
+      kind: PersistentVolume
+      metadata:
+        name: "{{ app_name }}-pv"  # PVC名称（与Deployment挂载对应）
+        namespace: "{{ namespace }}"
+      spec:
+        capacity:
+          storage: "5Gi"
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: app-storage
+        hostPath:
+          path: "{{ app_host_path }}"  # 节点上的实际目录（需提前创建并授权）
+  run_once: true
+
+
+- name: 单节点模式 - 创建 App 数据 PVC
+  kubernetes.core.k8s:
+    state: present
+    resource_definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: "{{ app_name }}-data"  # PVC名称（与Deployment挂载对应）
+        namespace: "{{ namespace }}"
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: "5Gi"
+        storageClassName: app-storage
+  run_once: true
+
+
 - name: "创建命名空间"
   kubernetes.core.k8s:
     name: "{{ namespace }}"

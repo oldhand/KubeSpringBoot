@@ -60,3 +60,10 @@ spec:
             # 补充Redis密码（若有）
             - name: REDIS_PASSWORD
               value: "{{ app_env.REDIS_PASSWORD }}"
+          volumeMounts:
+            - name: app-data
+              mountPath: /data  # 挂载到/data目录（日志/配置）
+      volumes:
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: {{ app_name }}-data  # 需提前创建PVC

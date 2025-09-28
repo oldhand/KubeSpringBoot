@@ -3,20 +3,14 @@ FROM {{ app_image }}
 MAINTAINER oldhand
   
 # 配置时区（北京时间）
-RUN apk add --no-cache tzdata \
+RUN apk add --no-cache tzdata curl fontconfig ttf-dejavu \
     && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo "Asia/Shanghai" > /etc/timezone \
     && rm -rf /var/cache/apk/*  # 清理缓存，减小镜像体积
     
-# 创建非root用户（指定UID/GID，避免不同环境ID冲突）
-RUN addgroup -g 1001 appgroup && adduser -u 1001 -S appuser -G appgroup
-  
+
 # 工作目录
 WORKDIR /app
-  
-# 创建日志和临时目录（确保非root用户可写）
-RUN mkdir -p /app/logs /app/tmp \
-    && chown -R appuser:appgroup /app
   
 # 复制JAR包（根据实际路径修改）
 COPY {{ app_jar_name }}.jar /app/app.jar
@@ -24,33 +18,31 @@ COPY {{ app_jar_name }}.jar /app/app.jar
   
 # 健康检查（适配K8s存活探针，根据实际健康端点调整）
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-    CMD wget -q --spider http://localhost:{{ app_port }}/actuator/health || exit 1
-  
-# 切换非root用户
-USER appuser
+    CMD curl -q --spider http://localhost:{{ app_port }}/actuator/health || exit 1
   
 # 暴露端口（根据应用实际端口修改）
 EXPOSE {{ app_port }}
   
 # 启动命令（JVM参数优化及环境变量支持）
-ENTRYPOINT ["sh", "-c", "java \
-  # 容器适配：感知容器资源限制（Java 8u191+/11+支持）
--XX:+UseContainerSupport \
-  # 内存动态调整：通过环境变量控制，默认1G，生产按需设置
--Xms${JVM_XMS:-1024m} -Xmx${JVM_XMX:-1024m} \
-  # 元空间：默认128m-256m，类多可增大
--XX:MetaspaceSize=${JVM_METASPACE_SIZE:-128m} -XX:MaxMetaspaceSize=${JVM_MAX_METASPACE_SIZE:-256m} \
-  # G1GC优化：大堆场景推荐，设置新生代比例（0-50）
--XX:+UseG1GC -XX:NewRatio=2 \
-  # GC停顿目标：根据业务调整（如50ms）
--XX:MaxGCPauseMillis=${JVM_GC_PAUSE:-200} \
-  # OOM处理：生成堆转储并退出
--XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/heapdump-$(date +%Y%m%d%H%M%S).hprof \
-  # GC日志：输出到日志目录，按大小轮转
--XX:+PrintGCDetails -XX:+PrintGCDateStamps \
--XX:GCLogFileSize=100m -XX:NumberOfGCLogFiles=5 \
--Xloggc:/app/logs/gc-%t.log \
-  # 应用日志目录（传递给应用）
--Dlogging.file.name=/app/logs/application.log \
-  # 启动JAR包
--jar /app/app.jar"]
+ENTRYPOINT ["sh", "-c", " \
+# 1. 确保/data下的子目录存在（挂载PVC后可能为空） 
+mkdir -p /data/logs /data/uploads; \
+# 启动Java应用（保留原JVM参数）
+# 容器适配：感知容器资源限制（Java 8u191+/11+支持）
+java -XX:+UseContainerSupport \
+      # 内存动态调整：通过环境变量控制，默认1G，生产按需设置
+    -Xms${JVM_XMS:-1024m} -Xmx${JVM_XMX:-1024m} \
+      # 元空间：默认128m-256m，类多可增大
+    -XX:MetaspaceSize=${JVM_METASPACE_SIZE:-128m} -XX:MaxMetaspaceSize=${JVM_MAX_METASPACE_SIZE:-256m} \
+      # G1GC优化：大堆场景推荐，设置新生代比例（0-50）
+    -XX:+UseG1GC -XX:NewRatio=2 \
+      # GC停顿目标：根据业务调整（如50ms）
+    -XX:MaxGCPauseMillis=${JVM_GC_PAUSE:-200} \
+      # OOM处理：生成堆转储并退出
+    -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/logs/heapdump-$(date +%Y%m%d%H%M%S).hprof \
+      # GC日志：输出到日志目录，按大小轮转
+    -XX:+PrintGCDetails -XX:+PrintGCDateStamps \
+    -XX:GCLogFileSize=100m -XX:NumberOfGCLogFiles=5 \
+    -Xloggc:/data/logs/gc-%t.log \
+      # 启动JAR包
+    -jar /app/app.jar"]
