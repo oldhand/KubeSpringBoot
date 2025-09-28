@@ -1,5 +1,10 @@
 #!/bin/bash
 
+
+# 获取CPU架构
+cpu_arch=$(uname -m)
+echo "CPU架构: $cpu_arch"
+
 # 定义华为云SWR容器仓库地址
 SWR_REPOSITORY="swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io"
 
@@ -60,3 +65,6 @@ for image in "${IMAGES[@]}"; do
     tar_file=$(echo "${image}" | tr '/: ' '_' ).tar
     echo "- ${tar_file} (对应原始镜像: ${image})"
 done
+
+
+mv -f *.tar $cpu_arch
