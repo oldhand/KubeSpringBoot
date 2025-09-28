@@ -47,9 +47,12 @@ spec:
                   key: root-password
             - name: MINIO_CONSOLE_ADDRESS
               value: ":9001"
+            - name: MINIO_BROWSER_CONTENT_SECURITY_POLICY
+              value: "default-src * 'unsafe-inline' 'unsafe-eval';"
           args:
             - server
             - /data  # 单节点存储路径
+            - --console-address=:9001
           volumeMounts:
             - name: minio-data
               mountPath: /data       # 挂载数据卷（PVC）

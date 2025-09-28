@@ -112,8 +112,6 @@
             name: api
           - port: "{{ minio_console_port }}"
             name: console
-          - port: 16379
-            name: cluster  # 集群总线端口
   when: minio_mode == "distributed"
   run_once: true
 

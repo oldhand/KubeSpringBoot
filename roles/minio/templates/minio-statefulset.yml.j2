@@ -62,6 +62,8 @@ spec:
               value: ":9001"
             - name: MINIO_DOMAIN
               value: {{ minio_domain }}
+            - name: MINIO_BROWSER_CONTENT_SECURITY_POLICY
+              value: "default-src * 'unsafe-inline' 'unsafe-eval';"
           args:
             - server
             # 集群节点访问地址（StatefulSet固定命名格式：{name}-0、{name}-1...）
