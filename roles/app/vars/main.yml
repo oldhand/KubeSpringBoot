@@ -10,22 +10,6 @@ app_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/openjdk:8-jdk-alp
 app_host_path: "/data/java"    # 持久化目录（日志/配置）
 app_storage_size: "5Gi"              # 存储大小
 
-# 资源限制（单点/集群模式自适应）
-app_resources:
-  standalone:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-    limits:
-      cpu: "1000m"
-      memory: "2Gi"
-  cluster:
-    requests:
-      cpu: "1000m"
-      memory: "2Gi"
-    limits:
-      cpu: "2000m"
-      memory: "4Gi"
 
 # 环境配置（通过ConfigMap挂载）
 app_env:

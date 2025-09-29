@@ -27,8 +27,7 @@ EXPOSE {{ app_port }}
 ENTRYPOINT ["sh", "-c", " \
 # 1. 确保/data下的子目录存在（挂载PVC后可能为空） 
 mkdir -p /data/logs /data/uploads; \
-mkdir -p /data/app;  \
-ln -s /data/app /app/logs;  \
+ln -s /data/logs /app/logs;  \
 # 启动Java应用（保留原JVM参数）
 # 容器适配：感知容器资源限制（Java 8u191+/11+支持）
 java -XX:+UseContainerSupport \
@@ -45,6 +44,5 @@ java -XX:+UseContainerSupport \
       # GC日志：输出到日志目录，按大小轮转
     -XX:+PrintGCDetails -XX:+PrintGCDateStamps \
     -XX:GCLogFileSize=100m -XX:NumberOfGCLogFiles=5 \
-    -Xloggc:/data/logs/gc-%t.log \
       # 启动JAR包
     -jar /app/app.jar"]
