@@ -10,11 +10,8 @@ cpu_arch=$(uname -m)
 echo "操作系统: $os_name"
 echo "CPU架构: $cpu_arch"
 
+ansible-playbook -i hosts.ini install.yml -k
 
-
-
-#ansible-playbook -i hosts.ini install.yml -k
-ansible-playbook -i hosts.ini install.yml
 
 
 
