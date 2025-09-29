@@ -23,7 +23,7 @@
 
 - name: 显示找到的Jar文件信息
   ansible.builtin.debug:
-    msg: "已自动识别Jar包：{{ app_jar_name }}.jar）"
+    msg: "已自动识别Jar包：{{ app_jar_name }}.jar"
   run_once: true
 
 - name: 创建临时构建目录

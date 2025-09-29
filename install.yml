@@ -2,9 +2,9 @@
 - hosts: k8s
   gather_facts: yes
   roles:
-#    - mysql
-#    - redis
-#    - minio
+    - mysql
+    - redis
+    - minio
      - app
 
 
