@@ -2,13 +2,13 @@ FROM {{ app_image }}
 
 MAINTAINER oldhand
   
-# 配置时区（北京时间）
-RUN apk add --no-cache tzdata curl fontconfig ttf-dejavu \
-    && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo "Asia/Shanghai" > /etc/timezone \
-    && rm -rf /var/cache/apk/*  # 清理缓存，减小镜像体积
-    
-
+# 替换为阿里云镜像源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
+  && apk add --no-cache tzdata curl fontconfig ttf-dejavu \
+  && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+  && echo "Asia/Shanghai" > /etc/timezone \
+  && rm -rf /var/cache/apk/*
+      
 # 工作目录
 WORKDIR /app
   
