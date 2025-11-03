@@ -5,7 +5,7 @@ namespace: spring-boot
 app_name: "kube-admin"               # 应用名称
 app_version: "1.0"            # 版本
 app_port: 8080                       # 应用内部端口
-app_nodeport: 30880                  # 外部访问节点端口
+app_nodeport: 30888                 # 外部访问节点端口
 app_image: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/openjdk:8-jdk-alpine"  # 镜像地址
 app_host_path: "/data/java"    # 持久化目录（日志/配置）
 app_storage_size: "5Gi"              # 存储大小
