@@ -41,8 +41,5 @@ java -XX:+UseContainerSupport \
     -XX:MaxGCPauseMillis=${JVM_GC_PAUSE:-200} \
       # OOM处理：生成堆转储并退出
     -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/logs/heapdump-$(date +%Y%m%d%H%M%S).hprof \
-      # GC日志：输出到日志目录，按大小轮转
-    -XX:+PrintGCDetails -XX:+PrintGCDateStamps \
-    -XX:GCLogFileSize=100m -XX:NumberOfGCLogFiles=5 \
       # 启动JAR包
-    -jar /app/app.jar"]
+    -jar /app/app.jar
